@@ -8,128 +8,150 @@
     </p>
 </p>
 
-# Onym - Flexible Filename Generator
+# Onym v2 - Advanced Filename Generator
 
-A flexible Laravel package for generating filenames using various strategies and options.
+A powerful Laravel package for generating secure, unique, and structured filenames using various strategies with extensive validation and collision detection.
 
 ## 🚀 Features
 
-- ✅ **Flexible Filename Generation** – Generate filenames dynamically using various strategies.
-- 🎲 **Multiple Strategies** – Supports `random`, `uuid`, `timestamp`, `date`, `numbered`, `slug`, and `hash`.
-- 🔧 **Customizable Output** – Specify filename, extension, and additional formatting options.
-- 🎯 **Laravel-Friendly** – Designed to work seamlessly with Laravel's filesystem and configuration.
-- 📂 **Human-Readable & Unique Names** – Ensures filenames are structured, collision-free, and easy to understand.
-- ⚙️ **Configurable Defaults** – Define global settings in `config/onym.php` for consistency across your application.
-- 🔌 **Extensible & Developer-Friendly** – Easily add custom filename strategies or modify existing ones.
+- ✅ **Advanced Filename Generation** – Generate filenames using multiple strategies with comprehensive options
+- 🎲 **Multiple Strategies** – Supports `random`, `uuid`, `timestamp`, `date`, `numbered`, `slug`, and `hash`
+- 🔒 **Security-First** – Built-in protection against path traversal attacks and malicious input
+- 🎯 **Laravel-Friendly** – Seamless integration with Laravel's ecosystem
+- 📂 **Collision Detection** – Automatic uniqueness checking with configurable storage paths
+- ⚙️ **Highly Configurable** – Extensive configuration options for each strategy
+- 🔧 **Method Consistency** – Standardized method signatures across all strategies
+- 🧪 **Thoroughly Tested** – Comprehensive test suite with 29 test cases
+- 🛡️ **Input Validation** – Robust validation for all parameters and edge cases
+- ⚡ **Performance Optimized** – Efficient caching and optimized algorithms
+
+## 📋 What's New in v2
+
+### 🔧 Breaking Changes
+- **Standardized method signatures** - All strategy methods now use consistent parameter order
+- **Updated `make()` method** - Parameter order changed to `filename, extension, strategy, options`
+- **Enhanced validation** - Stricter input validation with proper error handling
+
+### ✨ New Features
+- **`unique()` method** - Generate unique filenames with collision detection
+- **Enhanced security** - Path traversal prevention and input sanitization
+- **Advanced options** - New options like `use_filename`, `prepend_timestamp`, `pad_length`
+- **Storage path configuration** - Configure paths for collision detection
+- **Return type declarations** - Full PHP 8+ type safety
+- **Performance improvements** - Cached hash algorithms and optimized DateTime handling
 
 ## Installation
-
-You can install the package via composer:
 
 ```bash
 composer require blaspsoft/onym
 ```
 
-You can publish the config file with:
+Publish the config file:
 
 ```bash
 php artisan vendor:publish --tag="onym-config"
 ```
 
-## Usage
+## Basic Usage
 
-### Available Strategies
-
-### Random Strategy
-
-Generates a random string of characters for the filename.
-
-**Options:**
-
-- `length` (int): The length of the random string
-  - Default: 16
-  - Example: `['length' => 8]` generates "a1b2c3d4.txt"
-- `prefix` (string): String to prepend to the filename
-  - Default: ''
-  - Example: `['prefix' => 'temp_']` generates "temp_a1b2c3d4.txt"
-- `suffix` (string): String to append before the extension
-  - Default: ''
-  - Example: `['suffix' => '_draft']` generates "a1b2c3d4_draft.txt"
+### Quick Start
 
 ```php
 use Blaspsoft\Onym\Facades\Onym;
 
-// Generate an 8-character random filename with prefix and suffix
-Onym::make(strategy: 'random', options: [
-    'length' => 8,
-    'prefix' => 'temp_',
+// Generate a random filename
+$filename = Onym::random('document', 'pdf');
+// Result: "a1b2c3d4e5f6g7h8.pdf"
+
+// Generate with timestamp
+$filename = Onym::timestamp('report', 'xlsx');
+// Result: "report_2024-03-15_14-30-00.xlsx"
+
+// Generate unique filename (collision detection)
+$filename = Onym::unique('document', 'pdf', 'uuid');
+// Result: "550e8400-e29b-41d4-a716-446655440000.pdf"
+```
+
+### Universal `make()` Method
+
+```php
+// Using the make() method with different strategies
+$filename = Onym::make('document', 'pdf', 'random', ['length' => 12]);
+$filename = Onym::make('report', 'xlsx', 'timestamp', ['format' => 'Y-m-d_H-i-s']);
+$filename = Onym::make('My Document', 'txt', 'slug', ['separator' => '_']);
+```
+
+## Available Strategies
+
+### Random Strategy
+
+Generates cryptographically secure random strings.
+
+**Options:**
+- `length` (int): Length of random string (1-255, default: 16)
+- `use_filename` (bool): Include original filename (default: false)
+- `prefix` (string): String to prepend
+- `suffix` (string): String to append
+
+```php
+// Basic random filename
+Onym::random('document', 'pdf');
+// Result: "a1b2c3d4e5f6g7h8.pdf"
+
+// With original filename included
+Onym::random('document', 'pdf', ['use_filename' => true, 'length' => 8]);
+// Result: "document_a1b2c3d4.pdf"
+
+// With prefix and suffix
+Onym::random('temp', 'txt', [
+    'length' => 10,
+    'prefix' => 'tmp_',
     'suffix' => '_draft'
 ]);
-// Result: "temp_a1b2c3d4_draft.txt"
-
-// You can also use the random method directly
-Onym::random(string $extension, ?array $options = [])
+// Result: "tmp_a1b2c3d4e5_draft.txt"
 ```
 
 ### UUID Strategy
 
-Generates a UUID v4 (universally unique identifier) for the filename.
+Generates RFC 4122 compliant UUID v4 identifiers.
 
 **Options:**
-
-- `prefix` (string): String to prepend to the filename
-  - Default: ''
-  - Example: `['prefix' => 'id_']` generates "id_123e4567-e89b-12d3-a456-426614174000.txt"
-- `suffix` (string): String to append before the extension
-  - Default: ''
-  - Example: `['suffix' => '_backup']` generates "123e4567-e89b-12d3-a456-426614174000_backup.txt"
+- `use_filename` (bool): Include original filename (default: false)
+- `prefix` (string): String to prepend
+- `suffix` (string): String to append
 
 ```php
-use Blaspsoft\Onym\Facades\Onym;
+// Pure UUID filename
+Onym::uuid('document', 'pdf');
+// Result: "550e8400-e29b-41d4-a716-446655440000.pdf"
 
-// Generate a UUID filename with prefix and suffix
-Onym::make(strategy: 'uuid', options: [
-    'prefix' => 'id_',
-    'suffix' => '_backup'
-]);
-// Result: "id_123e4567-e89b-12d3-a456-426614174000_backup.txt"
-
-// You can also use the uuid method directly
-Onym::uuid(string $extension, ?array $options = [])
+// With original filename
+Onym::uuid('backup', 'sql', ['use_filename' => true]);
+// Result: "backup_550e8400-e29b-41d4-a716-446655440000.sql"
 ```
 
 ### Timestamp Strategy
 
-Adds a timestamp to the filename using PHP's DateTime formatting.
+Adds timestamps to filenames with customizable formats.
 
 **Options:**
-
-- `format` (string): PHP DateTime format string
-  - Default: 'Y-m-d_H-i-s'
-  - Common formats:
-    - `'Y-m-d_H-i-s'` → "2024-03-15_14-30-00"
-    - `'YmdHis'` → "20240315143000"
-    - `'U'` → Unix timestamp (e.g., "1710506400")
-- `prefix` (string): String to prepend to the filename
-  - Default: ''
-  - Example: `['prefix' => 'log_']`
-- `suffix` (string): String to append before the extension
-  - Default: ''
-  - Example: `['suffix' => '_archive']`
+- `format` (string): PHP DateTime format (default: 'Y-m-d_H-i-s')
+- `prepend_timestamp` (bool): Put timestamp before filename (default: false)
+- `prefix` (string): String to prepend
+- `suffix` (string): String to append
 
 ```php
-use Blaspsoft\Onym\Facades\Onym;
+// Standard timestamp
+Onym::timestamp('log', 'txt');
+// Result: "log_2024-03-15_14-30-00.txt"
 
-// Using timestamp with prefix and suffix
-Onym::make('document', 'pdf', 'timestamp', [
-    'format' => 'Y-m-d_H-i-s',
-    'prefix' => 'log_',
-    'suffix' => '_archive'
-]);
-// Result: "log_2024-03-15_14-30-00_document_archive.pdf"
+// Prepended timestamp
+Onym::timestamp('backup', 'sql', ['prepend_timestamp' => true]);
+// Result: "2024-03-15_14-30-00_backup.sql"
 
-// You can also use the timestamp method directly
-Onym::timestamp(string $defaultFilename, string $extension, ?array $options = [])
+// Custom format
+Onym::timestamp('report', 'pdf', ['format' => 'YmdHis']);
+// Result: "report_20240315143000.pdf"
 ```
 
 ### Date Strategy
@@ -137,183 +159,310 @@ Onym::timestamp(string $defaultFilename, string $extension, ?array $options = []
 Similar to timestamp but focused on date-only formats.
 
 **Options:**
-
-- `format` (string): PHP DateTime format string
-  - Default: 'Y-m-d'
-  - Common formats:
-    - `'Y-m-d'` → "2024-03-15"
-    - `'Ymd'` → "20240315"
-    - `'Y/m/d'` → "2024/03/15"
-- `prefix` (string): String to prepend to the filename
-  - Default: ''
-  - Example: `['prefix' => 'dated_']`
-- `suffix` (string): String to append before the extension
-  - Default: ''
-  - Example: `['suffix' => '_version']`
+- `format` (string): PHP DateTime format (default: 'Y-m-d')
+- `prepend_date` (bool): Put date before filename (default: false)
+- `prefix` (string): String to prepend
+- `suffix` (string): String to append
 
 ```php
-use Blaspsoft\Onym\Facades\Onym;
+// Standard date
+Onym::date('report', 'xlsx');
+// Result: "report_2024-03-15.xlsx"
 
-// Using date with prefix and suffix
-Onym::make('document', 'pdf', 'date', [
-    'format' => 'Y-m-d',
-    'prefix' => 'dated_',
-    'suffix' => '_version'
+// Prepended date with custom format
+Onym::date('daily', 'log', [
+    'format' => 'Ymd',
+    'prepend_date' => true
 ]);
-// Result: "dated_2024-03-15_document_version.pdf"
-
-// You can also use the date method directly
-Onym::date(string $defaultFilename, string $extension, ?array $options = [])
+// Result: "20240315_daily.log"
 ```
 
 ### Numbered Strategy
 
-Adds a number to the filename.
+Adds sequential numbers to filenames with optional padding.
 
 **Options:**
-
-- `number` (int): The number to append to the filename
-  - Default: 1
-  - Example: `['number' => 5]`
-- `prefix` (string): String to prepend to the filename
-  - Default: ''
-  - Example: `['prefix' => 'rev_']`
-- `suffix` (string): String to append before the extension
-  - Default: ''
-  - Example: `['suffix' => '_final']`
+- `number` (int): Starting number (default: 1)
+- `separator` (string): Separator character (default: '_')
+- `pad_length` (int): Zero-pad to length (0 = no padding, default: 0)
+- `prefix` (string): String to prepend
+- `suffix` (string): String to append
 
 ```php
-use Blaspsoft\Onym\Facades\Onym;
+// Basic numbered
+Onym::numbered('document', 'pdf', ['number' => 5]);
+// Result: "document_5.pdf"
 
-// Adding numbers with prefix and suffix
-Onym::make('document', 'pdf', 'numbered', [
-    'number' => 5,
-    'prefix' => 'rev_',
-    'suffix' => '_final'
-]);
-// Result: "rev_document_5_final.pdf"
+// With zero padding
+Onym::numbered('file', 'txt', ['number' => 7, 'pad_length' => 3]);
+// Result: "file_007.txt"
 
-// You can also use the numbered method directly
-Onym::numbered(string $defaultFilename, string $extension, ?array $options = [])
+// Custom separator
+Onym::numbered('image', 'jpg', ['number' => 42, 'separator' => '-']);
+// Result: "image-42.jpg"
 ```
 
 ### Slug Strategy
 
-Converts the filename to a URL-friendly slug.
+Converts filenames to URL-friendly slugs.
 
 **Options:**
-
-- `prefix` (string): String to prepend to the filename
-  - Default: ''
-  - Example: `['prefix' => 'post_']`
-- `suffix` (string): String to append before the extension
-  - Default: ''
-  - Example: `['suffix' => '_draft']`
+- `separator` (string): Separator character (default: '-')
+- `prefix` (string): String to prepend
+- `suffix` (string): String to append
 
 ```php
-use Blaspsoft\Onym\Facades\Onym;
+// Basic slug
+Onym::slug('My Document Name', 'pdf');
+// Result: "my-document-name.pdf"
 
-// Converting strings to slugs with prefix and suffix
-Onym::make('My Document Name', 'pdf', 'slug', [
-    'prefix' => 'post_',
-    'suffix' => '_draft'
-]);
-// Result: "post_my-document-name_draft.pdf"
-
-// You can also use the slug method directly
-Onym::slug(string $defaultFilename, string $extension, ?array $options = [])
+// With underscore separator
+Onym::slug('Product Catalog 2024', 'xlsx', ['separator' => '_']);
+// Result: "product_catalog_2024.xlsx"
 ```
 
 ### Hash Strategy
 
-Generates a hash of the filename using various algorithms.
+Generates hashes from filenames with multiple algorithm support.
 
 **Options:**
-
-- `algorithm` (string): The hashing algorithm to use
-  - Default: 'md5'
-  - Available algorithms:
-    - 'md5' (32 characters)
-    - 'sha1' (40 characters)
-    - 'sha256' (64 characters)
-    - Any algorithm supported by PHP's `hash()` function
-- `prefix` (string): String to prepend to the filename
-  - Default: ''
-  - Example: `['prefix' => 'hash_']`
-- `suffix` (string): String to append before the extension
-  - Default: ''
-  - Example: `['suffix' => '_checksum']`
+- `algorithm` (string): Hash algorithm (default: 'md5')
+  - Supported: md5, sha1, sha256, sha512, and all PHP `hash_algos()`
+- `length` (int): Truncate hash to length (null = full hash)
+- `use_filename` (bool): Include original filename (default: false)
+- `include_timestamp` (bool): Add timestamp for uniqueness (default: false)
+- `prefix` (string): String to prepend
+- `suffix` (string): String to append
 
 ```php
-use Blaspsoft\Onym\Facades\Onym;
+// Basic MD5 hash
+Onym::hash('document', 'pdf');
+// Result: "86985e105f79b95d6bc918fb45ec7727.pdf"
 
-// Using hash with prefix and suffix
-Onym::make('document', 'pdf', 'hash', [
-    'algorithm' => 'md5',
-    'prefix' => 'hash_',
-    'suffix' => '_checksum'
+// SHA256 with length limit
+Onym::hash('secure', 'txt', ['algorithm' => 'sha256', 'length' => 16]);
+// Result: "2c26b46b68ffc68f.txt"
+
+// With filename and timestamp for uniqueness
+Onym::hash('data', 'json', [
+    'use_filename' => true,
+    'include_timestamp' => true
 ]);
-// Result: "hash_86985e105f79b95d6bc918fb45ec7727_checksum.pdf"
-
-// You can also use the hash method directly
-Onym::hash(string $defaultFilename, string $extension, ?array $options = [])
+// Result: "data_1a2b3c4d5e6f7g8h.json"
 ```
 
-## Global Configuration
+## Collision Detection & Uniqueness
 
-You can set default values for all strategies in your `config/onym.php` file:
+### The `unique()` Method
+
+Generate filenames guaranteed to be unique within a specified directory.
 
 ```php
+// Configure storage path for collision detection
+Onym::setStoragePath('/path/to/uploads');
+
+// Generate unique filename
+$filename = Onym::unique('document', 'pdf', 'timestamp');
+// If "document_2024-03-15_14-30-00.pdf" exists, 
+// it will generate a different one
+
+// With custom retry strategy
+$filename = Onym::unique('file', 'txt', 'numbered', ['number' => 1]);
+// Will increment number until unique: file_1.txt, file_2.txt, etc.
+```
+
+### Configuration
+
+```php
+// In config/onym.php
 return [
-    // Default filename when none is provided
+    'storage_path' => '/path/to/check/for/collisions',
+    'max_unique_attempts' => 10, // Max attempts before fallback to UUID
+    // ... other config
+];
+```
+
+## Security Features
+
+### Path Traversal Prevention
+
+```php
+// Malicious input is automatically sanitized
+$filename = Onym::make('../../../etc/passwd', 'txt');
+// Result: "etcpasswd_a1b2c3d4.txt" (sanitized)
+
+$filename = Onym::make('..\\..\\windows\\system32', 'exe');
+// Result: "windowssystem32_a1b2c3d4.exe" (sanitized)
+```
+
+### Input Validation
+
+```php
+// Length validation
+try {
+    Onym::random('test', 'txt', ['length' => 0]);
+} catch (InvalidArgumentException $e) {
+    // "Length must be between 1 and 255"
+}
+
+// Hash algorithm validation
+try {
+    Onym::hash('test', 'txt', ['algorithm' => 'invalid']);
+} catch (InvalidArgumentException $e) {
+    // "Invalid hash algorithm: invalid"
+}
+```
+
+## Advanced Configuration
+
+### Complete Configuration Example
+
+```php
+// config/onym.php
+return [
     'default_filename' => 'file',
-
-    // Default extension when none is provided
     'default_extension' => 'txt',
-
-    // Default strategy when none is specified
     'strategy' => 'random',
-
-    // Default options for all strategies
+    'storage_path' => storage_path('app/uploads'),
+    'max_unique_attempts' => 15,
+    
     'options' => [
-
         'random' => [
-            'length' => 16,
-            'prefix' => '',
+            'length' => 20,
+            'use_filename' => false,
+            'prefix' => 'rnd_',
             'suffix' => '',
         ],
-
+        
+        'uuid' => [
+            'use_filename' => true,
+            'prefix' => '',
+            'suffix' => '_uuid',
+        ],
+        
         'timestamp' => [
-            'format' => 'Y-m-d_H-i-s',
-            'prefix' => '',
+            'format' => 'Y-m-d_H-i-s-u', // Include microseconds
+            'prepend_timestamp' => false,
+            'prefix' => 'ts_',
             'suffix' => '',
         ],
-
+        
         'date' => [
-            'format' => 'Y-m-d',
+            'format' => 'Y/m/d',
+            'prepend_date' => false,
             'prefix' => '',
-            'suffix' => '',
+            'suffix' => '_daily',
         ],
-
+        
         'numbered' => [
-            'number' => 1,
-            'separator' => '_',
-            'prefix' => '',
+            'number' => 1000,
+            'separator' => '-',
+            'pad_length' => 5,
+            'prefix' => 'doc_',
             'suffix' => '',
         ],
-
+        
+        'slug' => [
+            'separator' => '_',
+            'prefix' => 'slug_',
+            'suffix' => '_clean',
+        ],
+        
         'hash' => [
-            'algorithm' => 'md5',
-            'length' => 16,
-            'prefix' => '',
-            'suffix' => '',
+            'algorithm' => 'sha256',
+            'length' => 32,
+            'use_filename' => true,
+            'include_timestamp' => true,
+            'prefix' => 'hash_',
+            'suffix' => '_secure',
         ],
     ],
 ];
 ```
 
-These defaults can be overridden on a per-call basis using the `options` parameter in the `make()` and in all strategy methods.
+### Runtime Configuration
+
+```php
+// Set storage path for collision detection
+Onym::setStoragePath('/custom/path');
+
+// Set maximum unique attempts
+Onym::setMaxUniqueAttempts(20);
+
+// Chain configuration
+$filename = Onym::setStoragePath('/uploads')
+                 ->setMaxUniqueAttempts(5)
+                 ->unique('document', 'pdf');
+```
+
+## Error Handling
+
+```php
+try {
+    $filename = Onym::hash('test', 'txt', ['algorithm' => 'nonexistent']);
+} catch (InvalidArgumentException $e) {
+    echo "Hash algorithm error: " . $e->getMessage();
+}
+
+try {
+    $filename = Onym::timestamp('test', 'txt', ['format' => '@#$%']);
+} catch (InvalidArgumentException $e) {
+    echo "Date format error: " . $e->getMessage();
+}
+
+try {
+    $filename = Onym::random('test', 'txt', ['length' => -1]);
+} catch (InvalidArgumentException $e) {
+    echo "Length validation error: " . $e->getMessage();
+}
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+composer test
+```
+
+Run tests with coverage:
+
+```bash
+composer test-coverage
+```
+
+## Changelog
+
+### v2.0.0 - Major Refactor
+- **Breaking**: Standardized all method signatures
+- **Breaking**: Updated `make()` parameter order
+- **New**: Added `unique()` method with collision detection  
+- **New**: Enhanced security with path traversal prevention
+- **New**: Comprehensive input validation
+- **New**: Advanced configuration options
+- **New**: Performance optimizations
+- **Improved**: 100% test coverage with 29 test cases
+- **Improved**: Full PHP 8+ type declarations
+
+### v1.x - Legacy
+- Basic filename generation strategies
+- Simple configuration options
+- Limited validation
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Add tests for your changes
+4. Ensure all tests pass (`composer test`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)  
+7. Open a Pull Request
 
 ## License
 
-Blasp is open-sourced software licensed under the [MIT license](LICENSE).
+Onym is open-sourced software licensed under the [MIT license](LICENSE.md).
+
+---
+
+**Note**: This is version 2.0 with breaking changes from v1.x. Please review the upgrade guide in the documentation before upgrading existing installations.

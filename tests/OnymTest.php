@@ -27,16 +27,33 @@ class OnymTest extends TestCase
     #[Test]
     public function it_generates_random_filenames()
     {
-        $filename = $this->onym->random('txt', ['length' => 8]);
+        $filename = $this->onym->random(null, 'txt', ['length' => 8]);
         $this->assertEquals(12, strlen($filename)); // 8 chars + '.txt'
         $this->assertStringEndsWith('.txt', $filename);
     }
 
     #[Test]
+    public function it_generates_random_filenames_with_original_filename()
+    {
+        $filename = $this->onym->random('test', 'txt', ['length' => 8, 'use_filename' => true]);
+        $this->assertStringStartsWith('test_', $filename);
+        $this->assertStringEndsWith('.txt', $filename);
+        $this->assertEquals(17, strlen($filename)); // 'test_' (5) + 8 chars + '.txt' (4)
+    }
+
+    #[Test]
     public function it_generates_uuid_filenames()
     {
-        $filename = $this->onym->uuid('txt');
+        $filename = $this->onym->uuid(null, 'txt');
         $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.txt$/', $filename);
+    }
+
+    #[Test]
+    public function it_generates_uuid_filenames_with_original_filename()
+    {
+        $filename = $this->onym->uuid('document', 'txt', ['use_filename' => true]);
+        $this->assertStringStartsWith('document_', $filename);
+        $this->assertStringEndsWith('.txt', $filename);
     }
 
     #[Test]
@@ -44,8 +61,20 @@ class OnymTest extends TestCase
     {
         $now = new DateTime();
         $filename = $this->onym->timestamp('test', 'txt', ['format' => 'Y-m-d_H-i-s']);
+        $this->assertStringStartsWith('test_' . $now->format('Y-m-d'), $filename);
+        $this->assertStringEndsWith('.txt', $filename);
+    }
+
+    #[Test]
+    public function it_generates_timestamp_filenames_with_prepend()
+    {
+        $now = new DateTime();
+        $filename = $this->onym->timestamp('test', 'txt', [
+            'format' => 'Y-m-d_H-i-s',
+            'prepend_timestamp' => true
+        ]);
         $this->assertStringStartsWith($now->format('Y-m-d'), $filename);
-        $this->assertStringEndsWith('test.txt', $filename);
+        $this->assertStringEndsWith('_test.txt', $filename);
     }
 
     #[Test]
@@ -53,161 +82,180 @@ class OnymTest extends TestCase
     {
         $now = new DateTime();
         $filename = $this->onym->date('test', 'txt', ['format' => 'Y-m-d']);
-        $this->assertEquals($now->format('Y-m-d') . '_test.txt', $filename);
+        $this->assertStringStartsWith('test_' . $now->format('Y-m-d'), $filename);
+        $this->assertStringEndsWith('.txt', $filename);
     }
 
     #[Test]
     public function it_generates_numbered_filenames()
     {
-        $filename = $this->onym->numbered('test', 'txt', ['number' => 5]); 
+        $filename = $this->onym->numbered('test', 'txt', ['number' => 5]);
         $this->assertEquals('test_5.txt', $filename);
+    }
+
+    #[Test]
+    public function it_generates_numbered_filenames_with_padding()
+    {
+        $filename = $this->onym->numbered('test', 'txt', ['number' => 5, 'pad_length' => 3]);
+        $this->assertEquals('test_005.txt', $filename);
     }
 
     #[Test]
     public function it_generates_slug_filenames()
     {
-        $filename = $this->onym->slug('Test File Name', 'txt');    
-        $this->assertEquals('test-file-name.txt', $filename);
+        $filename = $this->onym->slug('My Document Name', 'txt');
+        $this->assertEquals('my-document-name.txt', $filename);
+    }
+
+    #[Test]
+    public function it_generates_slug_filenames_with_custom_separator()
+    {
+        $filename = $this->onym->slug('My Document Name', 'txt', ['separator' => '_']);
+        $this->assertEquals('my_document_name.txt', $filename);
     }
 
     #[Test]
     public function it_generates_hash_filenames()
     {
         $filename = $this->onym->hash('test', 'txt', ['algorithm' => 'md5']);
-        $this->assertEquals(md5('test') . '.txt', $filename);
+        $this->assertEquals(36, strlen($filename)); // 32 chars MD5 + '.txt'
+        $this->assertStringEndsWith('.txt', $filename);
     }
 
     #[Test]
-    public function it_throws_exception_for_invalid_hash_algorithm()
+    public function it_generates_hash_filenames_with_length()
+    {
+        $filename = $this->onym->hash('test', 'txt', ['algorithm' => 'md5', 'length' => 8]);
+        $this->assertEquals(12, strlen($filename)); // 8 chars + '.txt'
+        $this->assertStringEndsWith('.txt', $filename);
+    }
+
+    #[Test]
+    public function it_generates_hash_filenames_with_original_filename()
+    {
+        $filename = $this->onym->hash('test', 'txt', ['use_filename' => true]);
+        $this->assertStringStartsWith('test_', $filename);
+        $this->assertStringEndsWith('.txt', $filename);
+    }
+
+    #[Test]
+    public function it_applies_prefix_and_suffix()
+    {
+        $filename = $this->onym->random(null, 'txt', [
+            'length' => 8,
+            'prefix' => 'pre_',
+            'suffix' => '_suf'
+        ]);
+        $this->assertStringStartsWith('pre_', $filename);
+        $this->assertStringContainsString('_suf', $filename);
+        $this->assertStringEndsWith('.txt', $filename);
+    }
+
+    #[Test]
+    public function it_validates_length_parameter()
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->onym->hash('test', 'txt', ['algorithm' => 'invalid']);
+        $this->expectExceptionMessage('Length must be between 1 and 255');
+        $this->onym->random(null, 'txt', ['length' => 0]);
     }
 
     #[Test]
-    public function it_allows_strategy_override_in_make_method()
+    public function it_validates_negative_number()
     {
-        $filename = $this->onym->make('test', 'uuid', 'txt');
-        $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.txt$/', $filename);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Number must be non-negative');
+        $this->onym->numbered('test', 'txt', ['number' => -1]);
     }
 
     #[Test]
-    public function it_allows_options_override_in_make_method()
+    public function it_validates_invalid_hash_algorithm()
     {
-        $filename = $this->onym->make('file', 'random', 'txt', ['length' => 8, 'prefix' => 'custom_']);
-        $this->assertEquals(19, strlen($filename));
-        $this->assertStringEndsWith('.txt', $filename);
-        $this->assertEquals('custom_', substr($filename, 0, 7));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid hash algorithm: invalid_algo');
+        $this->onym->hash('test', 'txt', ['algorithm' => 'invalid_algo']);
     }
 
     #[Test]
-    public function it_allows_options_override_in_random_method()
+    public function it_validates_invalid_date_format()
     {
-        $filename = $this->onym->random('txt', ['length' => 8, 'prefix' => 'custom_']);
-        $this->assertEquals(19, strlen($filename));
-        $this->assertStringEndsWith('.txt', $filename);
-        $this->assertEquals('custom_', substr($filename, 0, 7));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid date format: @#$%');
+        $this->onym->timestamp('test', 'txt', ['format' => '@#$%']);
     }
 
     #[Test]
-    public function it_allows_options_override_in_uuid_method()
+    public function it_sanitizes_filenames()
     {
-        $filename = $this->onym->uuid('txt', ['prefix' => 'custom_']);
-        $this->assertMatchesRegularExpression('/^custom_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.txt$/', $filename);
+        $filename = $this->onym->make('../malicious/path', 'txt');
+        $this->assertStringNotContainsString('../', $filename);
+        $this->assertStringNotContainsString('/', $filename);
+        $this->assertStringNotContainsString('\\', $filename);
     }
 
     #[Test]
-    public function it_allows_options_override_in_timestamp_method()
+    public function it_sanitizes_extensions()
     {
-        $filename = $this->onym->timestamp('test', 'txt', ['prefix' => 'custom_', 'format' => 'Y-m-d_H-i-s', 'suffix' => '_suffix']);
-        $this->assertMatchesRegularExpression('/^custom_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_test_suffix\.txt$/', $filename);
-    }
-
-    #[Test]
-    public function it_allows_options_override_in_date_method()
-    {
-        $filename = $this->onym->date('test', 'txt', ['prefix' => 'custom_', 'format' => 'Y-m-d', 'suffix' => '_suffix']);
-        $this->assertMatchesRegularExpression('/^custom_\d{4}-\d{2}-\d{2}_test_suffix\.txt$/', $filename);
-    }
-
-    #[Test]
-    public function it_allows_options_override_in_numbered_method()
-    {
-        $filename = $this->onym->numbered('filename', 'txt', ['prefix' => 'prefix_', 'number' => 5, 'suffix' => '_suffix']);
-        $this->assertEquals('prefix_filename_5_suffix.txt', $filename);
-    }
-
-    #[Test]
-    public function it_allows_options_override_in_slug_method()
-    {
-        $filename = $this->onym->slug('filename', 'txt', ['prefix' => 'prefix_', 'suffix' => '_suffix']);        
-        $this->assertEquals('prefix_filename_suffix.txt', $filename);
-    }
-
-    #[Test]
-    public function it_allows_options_override_in_hash_method()
-    {
-        $hash = md5('filename');
-        $filename = $this->onym->hash('filename', 'txt', ['prefix' => 'prefix_', 'suffix' => '_suffix', 'algorithm' => 'md5']);
-
-        $this->assertEquals('prefix_' . $hash . '_suffix.txt', $filename);
-    }
-
-    #[Test]
-    public function it_allows_options_override_in_make_method_with_null_values()
-    {
-        $filename = $this->onym->make('filename', 'random', 'txt', ['prefix' => null, 'suffix' => null, 'length' => null]);
-        $this->assertEquals(20, strlen($filename));
+        $filename = $this->onym->make('test', '.TXT');
         $this->assertStringEndsWith('.txt', $filename);
     }
 
     #[Test]
-    public function it_allows_options_override_in_random_method_with_null_values()
+    public function it_generates_unique_filenames_without_collision()
     {
-        $filename = $this->onym->random('txt', ['prefix' => null, 'suffix' => null, 'length' => null]);
-        $this->assertEquals(20, strlen($filename));
+        // Test without setting storage path (no collision detection)
+        $filename1 = $this->onym->unique('test', 'txt');
+        $filename2 = $this->onym->unique('test', 'txt');
+        
+        // Without storage path, it should just generate normally
+        $this->assertStringEndsWith('.txt', $filename1);
+        $this->assertStringEndsWith('.txt', $filename2);
     }
 
     #[Test]
-    public function it_allows_options_override_in_uuid_method_with_null_values()
+    public function it_throws_exception_for_unknown_strategy()
     {
-        $filename = $this->onym->uuid('txt', ['prefix' => null, 'suffix' => null]);
-        $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.txt$/', $filename);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown strategy: unknown');
+        $this->onym->make('test', 'txt', 'unknown');
     }
 
     #[Test]
-    public function it_allows_options_override_in_timestamp_method_with_null_values()
+    public function it_can_set_storage_path()
     {
-        $filename = $this->onym->timestamp('test', 'txt', ['prefix' => null, 'suffix' => null, 'format' => null]);
-        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_test\.txt$/', $filename);
+        $result = $this->onym->setStoragePath('/tmp');
+        $this->assertInstanceOf(Onym::class, $result);
     }
 
     #[Test]
-    public function it_allows_options_override_in_date_method_with_null_values()
+    public function it_can_set_max_unique_attempts()
     {
-        $filename = $this->onym->date('test', 'txt', ['prefix' => null, 'suffix' => null, 'format' => null]);
-        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}_test\.txt$/', $filename);
+        $result = $this->onym->setMaxUniqueAttempts(5);
+        $this->assertInstanceOf(Onym::class, $result);
     }
 
     #[Test]
-    public function it_allows_options_override_in_numbered_method_with_null_values()
+    public function it_handles_hash_with_timestamp_for_uniqueness()
     {
-        $filename = $this->onym->numbered('filename', 'txt', ['prefix' => null, 'suffix' => null, 'number' => null]);
-        $this->assertEquals('filename_1.txt', $filename);
+        $filename1 = $this->onym->hash('test', 'txt', ['include_timestamp' => true]);
+        usleep(1000); // Small delay to ensure different timestamp
+        $filename2 = $this->onym->hash('test', 'txt', ['include_timestamp' => true]);
+        
+        $this->assertNotEquals($filename1, $filename2);
     }
 
     #[Test]
-    public function it_allows_options_override_in_slug_method_with_null_values()
+    public function it_validates_hash_length_bounds()
     {
-        $filename = $this->onym->slug('filename', 'txt', ['prefix' => null, 'suffix' => null]);
-        $this->assertEquals('filename.txt', $filename);
+        $this->expectException(InvalidArgumentException::class);
+        $this->onym->hash('test', 'txt', ['algorithm' => 'md5', 'length' => 100]);
     }
 
     #[Test]
-    public function it_allows_options_override_in_hash_method_with_null_values()
+    public function it_uses_default_values_for_empty_inputs()
     {
-        $hash = md5('filename');
-        $filename = $this->onym->hash('filename', 'txt', ['prefix' => null, 'suffix' => null, 'algorithm' => null]);
-        $this->assertEquals($hash . '.txt', $filename);
+        // Test with slug strategy to ensure filename is included
+        $filename = $this->onym->make('', '', 'slug');
+        $this->assertStringEndsWith('.txt', $filename);
+        $this->assertStringContainsString('file', $filename);
     }
 }

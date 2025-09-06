@@ -2,8 +2,6 @@
 
 namespace Blaspsoft\Onym;
 
-use DateTime;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -20,29 +18,9 @@ use InvalidArgumentException;
 class Onym
 {
     /**
-     * The strategy to use.
+     * The strategy registry.
      */
-    protected string $strategy;
-
-    /**
-     * The options to use.
-     */
-    protected array $options;
-
-    /**
-     * The default filename to use.
-     */
-    protected string $defaultFilename;
-
-    /**
-     * The default extension to use.
-     */
-    protected string $defaultExtension;
-
-    /**
-     * Cached hash algorithms for performance.
-     */
-    protected static ?array $hashAlgorithms = null;
+    protected StrategyRegistry $registry;
 
     /**
      * Storage path for collision detection.
@@ -54,10 +32,19 @@ class Onym
      */
     protected int $maxUniqueAttempts = 10;
 
-    public function __construct()
+    /**
+     * Default filename to use.
+     */
+    protected string $defaultFilename;
+
+    /**
+     * Default extension to use.
+     */
+    protected string $defaultExtension;
+
+    public function __construct(StrategyRegistry $registry)
     {
-        $this->strategy = config('onym.strategy', 'random');
-        $this->options = config('onym.options', []);
+        $this->registry = $registry;
         $this->defaultFilename = config('onym.default_filename', 'file');
         $this->defaultExtension = config('onym.default_extension', 'txt');
         $this->storagePath = config('onym.storage_path');
@@ -73,43 +60,16 @@ class Onym
         ?string $strategy = null,
         ?array $options = null
     ): string {
-        $filename = $this->sanitizeFilename($filename ?? $this->defaultFilename);
-        $extension = $this->sanitizeExtension($extension ?? $this->defaultExtension);
-        $useStrategy = $strategy ?? $this->strategy;
-        $useOptions = $options !== null 
-            ? $this->mergeOptions($options, $useStrategy, $this->options) 
-            : ($this->options[$useStrategy] ?? []);
-
-        $this->validateInputs($filename, $extension, $useStrategy, $useOptions);
-
-        return match ($useStrategy) {
-            'random' => $this->random($filename, $extension, $useOptions),
-            'uuid' => $this->uuid($filename, $extension, $useOptions),
-            'timestamp' => $this->timestamp($filename, $extension, $useOptions),
-            'date' => $this->date($filename, $extension, $useOptions),
-            'numbered' => $this->numbered($filename, $extension, $useOptions),
-            'slug' => $this->slug($filename, $extension, $useOptions),
-            'hash' => $this->hash($filename, $extension, $useOptions),
-            default => throw new InvalidArgumentException("Unknown strategy: {$useStrategy}"),
-        };
+        $strategy = $this->registry->get($strategy);
+        return $strategy->generate($filename, $extension, $options ?? []);
     }
 
     /**
-     * Generate a random string filename.
+     * Generate a random filename.
      */
     public function random(?string $filename = null, ?string $extension = null, ?array $options = []): string
     {
-        $filename = $filename ?? $this->defaultFilename;
-        $extension = $extension ?? $this->defaultExtension;
-        $options = $this->mergeOptions($options, 'random', $this->options);
-        
-        $length = $options['length'] ?? 16;
-        $this->validateLength($length, 1, 255);
-        
-        $randomString = Str::random($length);
-        $generatedName = $options['use_filename'] ?? false ? "{$filename}_{$randomString}" : $randomString;
-        
-        return $this->applyAffixes($generatedName, $extension, $options);
+        return $this->make($filename, $extension, 'random', $options);
     }
 
     /**
@@ -117,14 +77,7 @@ class Onym
      */
     public function uuid(?string $filename = null, ?string $extension = null, ?array $options = []): string
     {
-        $filename = $filename ?? $this->defaultFilename;
-        $extension = $extension ?? $this->defaultExtension;
-        $options = $this->mergeOptions($options, 'uuid', $this->options);
-        
-        $uuid = (string) Str::uuid();
-        $generatedName = $options['use_filename'] ?? false ? "{$filename}_{$uuid}" : $uuid;
-        
-        return $this->applyAffixes($generatedName, $extension, $options);
+        return $this->make($filename, $extension, 'uuid', $options);
     }
 
     /**
@@ -132,20 +85,7 @@ class Onym
      */
     public function timestamp(?string $filename = null, ?string $extension = null, ?array $options = []): string
     {
-        $filename = $filename ?? $this->defaultFilename;
-        $extension = $extension ?? $this->defaultExtension;
-        $options = $this->mergeOptions($options, 'timestamp', $this->options);
-
-        $format = $options['format'] ?? 'Y-m-d_H-i-s';
-        $this->validateDateFormat($format);
-        
-        $date = $this->getDateTime();
-        $timestamp = $date->format($format);
-        $generatedName = $options['prepend_timestamp'] ?? false 
-            ? "{$timestamp}_{$filename}"
-            : "{$filename}_{$timestamp}";
-        
-        return $this->applyAffixes($generatedName, $extension, $options);
+        return $this->make($filename, $extension, 'timestamp', $options);
     }
 
     /**
@@ -153,20 +93,7 @@ class Onym
      */
     public function date(?string $filename = null, ?string $extension = null, ?array $options = []): string
     {
-        $filename = $filename ?? $this->defaultFilename;
-        $extension = $extension ?? $this->defaultExtension;
-        $options = $this->mergeOptions($options, 'date', $this->options);
-        
-        $format = $options['format'] ?? 'Y-m-d';
-        $this->validateDateFormat($format);
-        
-        $date = $this->getDateTime();
-        $dateString = $date->format($format);
-        $generatedName = $options['prepend_date'] ?? false
-            ? "{$dateString}_{$filename}"
-            : "{$filename}_{$dateString}";
-        
-        return $this->applyAffixes($generatedName, $extension, $options);
+        return $this->make($filename, $extension, 'date', $options);
     }
 
     /**
@@ -174,20 +101,7 @@ class Onym
      */
     public function numbered(?string $filename = null, ?string $extension = null, ?array $options = []): string
     {
-        $filename = $filename ?? $this->defaultFilename;
-        $extension = $extension ?? $this->defaultExtension;
-        $options = $this->mergeOptions($options, 'numbered', $this->options);
-        
-        $number = $options['number'] ?? 1;
-        $separator = $options['separator'] ?? '_';
-        $padLength = $options['pad_length'] ?? 0;
-        
-        $this->validateNumber($number);
-        
-        $numberString = $padLength > 0 ? str_pad($number, $padLength, '0', STR_PAD_LEFT) : $number;
-        $generatedName = "{$filename}{$separator}{$numberString}";
-        
-        return $this->applyAffixes($generatedName, $extension, $options);
+        return $this->make($filename, $extension, 'numbered', $options);
     }
 
     /**
@@ -195,14 +109,7 @@ class Onym
      */
     public function slug(?string $filename = null, ?string $extension = null, ?array $options = []): string
     {
-        $filename = $filename ?? $this->defaultFilename;
-        $extension = $extension ?? $this->defaultExtension;
-        $options = $this->mergeOptions($options, 'slug', $this->options);
-        
-        $separator = $options['separator'] ?? '-';
-        $generatedName = Str::slug($filename, $separator);
-        
-        return $this->applyAffixes($generatedName, $extension, $options);
+        return $this->make($filename, $extension, 'slug', $options);
     }
 
     /**
@@ -210,29 +117,7 @@ class Onym
      */
     public function hash(?string $filename = null, ?string $extension = null, ?array $options = []): string
     {
-        $filename = $filename ?? $this->defaultFilename;
-        $extension = $extension ?? $this->defaultExtension;
-        $options = $this->mergeOptions($options, 'hash', $this->options);
-        
-        $algorithm = $options['algorithm'] ?? 'md5';
-        $length = $options['length'] ?? null;
-        
-        $this->validateHashAlgorithm($algorithm);
-        
-        $hashInput = $options['include_timestamp'] ?? false 
-            ? $filename . microtime(true) 
-            : $filename;
-            
-        $hash = hash($algorithm, $hashInput);
-        
-        if ($length !== null && $length > 0) {
-            $this->validateLength($length, 1, strlen($hash));
-            $hash = substr($hash, 0, $length);
-        }
-        
-        $generatedName = $options['use_filename'] ?? false ? "{$filename}_{$hash}" : $hash;
-        
-        return $this->applyAffixes($generatedName, $extension, $options);
+        return $this->make($filename, $extension, 'hash', $options);
     }
 
     /**
@@ -246,169 +131,88 @@ class Onym
     ): string {
         $options = $options ?? [];
         $attempts = 0;
+        $strategyName = $strategy ?? $this->registry->getDefault();
+        $strategyInstance = $this->registry->get($strategyName);
         
         do {
-            $generatedName = $this->make($filename, $extension, $strategy, $options);
+            $generatedName = $strategyInstance->generate($filename, $extension, $options);
             $attempts++;
             
             if (!$this->storagePath || !$this->fileExists($generatedName)) {
                 return $generatedName;
             }
             
-            // Modify options to ensure different output on retry
-            if ($strategy === 'numbered' || ($strategy === null && $this->strategy === 'numbered')) {
-                $options['number'] = ($options['number'] ?? 1) + 1;
-            } elseif ($strategy === 'random' || ($strategy === null && $this->strategy === 'random')) {
-                $options['length'] = ($options['length'] ?? 16) + 2;
-            }
+            // Modify options to ensure different output on retry based on strategy type
+            $options = $this->modifyOptionsForRetry($strategyInstance->getName(), $options, $attempts);
             
         } while ($attempts < $this->maxUniqueAttempts);
         
         // Final attempt with UUID to ensure uniqueness
-        return $this->uuid($filename, $extension, array_merge($options, ['suffix' => '_' . time()]));
+        $uuidStrategy = $this->registry->get('uuid');
+        return $uuidStrategy->generate($filename, $extension, array_merge($options, ['suffix' => '_' . time()]));
     }
 
     /**
-     * Apply prefix and suffix to filename.
+     * Modify options for retry attempt to ensure different output.
      */
-    protected function applyAffixes(string $filename, string $extension, array $options = []): string
+    protected function modifyOptionsForRetry(string $strategyName, array $options, int $attempt): array
     {
-        if (!empty($options['prefix'])) {
-            $filename = $options['prefix'] . $filename;
+        switch ($strategyName) {
+            case 'numbered':
+                $options['number'] = ($options['number'] ?? 1) + 1;
+                break;
+            case 'random':
+                $options['length'] = ($options['length'] ?? 16) + 2;
+                break;
+            case 'timestamp':
+            case 'date':
+                // Add microseconds or increment suffix
+                $options['suffix'] = ($options['suffix'] ?? '') . '_' . $attempt;
+                break;
+            case 'hash':
+                // Force timestamp inclusion for uniqueness
+                $options['include_timestamp'] = true;
+                break;
+            default:
+                // For other strategies, append attempt number
+                $options['suffix'] = ($options['suffix'] ?? '') . '_' . $attempt;
+                break;
         }
         
-        if (!empty($options['suffix'])) {
-            $filename = $filename . $options['suffix'];
-        }
-        
-        return $filename . '.' . $extension;
+        return $options;
     }
 
     /**
-     * Merge options with the default options.
+     * Register a custom strategy.
      */
-    protected function mergeOptions(array $options, string $strategy, array $defaultOptions): array
+    public function extend(string $name, callable $generator): self
     {
-        $strategyOptions = $defaultOptions[$strategy] ?? [];
-        return array_merge($strategyOptions, $options);
+        $this->registry->extend($name, $generator);
+        return $this;
     }
 
     /**
-     * Sanitize filename to prevent path traversal.
+     * Check if a strategy exists.
      */
-    protected function sanitizeFilename(string $filename): string
+    public function hasStrategy(string $name): bool
     {
-        // Remove any path separators and parent directory references
-        $filename = str_replace(['/', '\\', '..'], '', $filename);
-        
-        // Remove any non-printable characters
-        $filename = preg_replace('/[\x00-\x1F\x7F]/', '', $filename);
-        
-        // Trim whitespace
-        $filename = trim($filename);
-        
-        if (empty($filename)) {
-            return $this->defaultFilename;
-        }
-        
-        return $filename;
+        return $this->registry->has($name);
     }
 
     /**
-     * Sanitize file extension.
+     * Get all registered strategy names.
      */
-    protected function sanitizeExtension(string $extension): string
+    public function getStrategies(): array
     {
-        // Remove dots and path separators
-        $extension = str_replace(['.', '/', '\\'], '', $extension);
-        
-        // Convert to lowercase
-        $extension = strtolower($extension);
-        
-        // Limit length
-        if (strlen($extension) > 10) {
-            $extension = substr($extension, 0, 10);
-        }
-        
-        if (empty($extension)) {
-            return $this->defaultExtension;
-        }
-        
-        return $extension;
+        return $this->registry->names();
     }
 
     /**
-     * Validate inputs.
+     * Get the strategy registry.
      */
-    protected function validateInputs(string $filename, string $extension, string $strategy, array $options): void
+    public function getRegistry(): StrategyRegistry
     {
-        if (empty($filename)) {
-            throw new InvalidArgumentException('Filename cannot be empty');
-        }
-        
-        if (empty($extension)) {
-            throw new InvalidArgumentException('Extension cannot be empty');
-        }
-        
-        if (strlen($filename) > 255) {
-            throw new InvalidArgumentException('Filename is too long (max 255 characters)');
-        }
-    }
-
-    /**
-     * Validate length parameter.
-     */
-    protected function validateLength(int $length, int $min = 1, int $max = 255): void
-    {
-        if ($length < $min || $length > $max) {
-            throw new InvalidArgumentException("Length must be between {$min} and {$max}");
-        }
-    }
-
-    /**
-     * Validate number parameter.
-     */
-    protected function validateNumber(int $number): void
-    {
-        if ($number < 0) {
-            throw new InvalidArgumentException('Number must be non-negative');
-        }
-    }
-
-    /**
-     * Validate date format.
-     */
-    protected function validateDateFormat(string $format): void
-    {
-        // List of valid date format characters from PHP documentation
-        $validChars = 'dDjlNSwzWFmMntLoYyaABgGhHisuveIOPTZcrU -_/:\\';
-        
-        // Check if format contains only valid characters
-        if (preg_match('/[^' . preg_quote($validChars, '/') . ']/', $format)) {
-            throw new InvalidArgumentException("Invalid date format: {$format}");
-        }
-
-        // Additional check: try to format with current date
-        try {
-            $date = new DateTime();
-            $date->format($format);
-        } catch (\Exception) {
-            throw new InvalidArgumentException("Invalid date format: {$format}");
-        }
-    }
-
-    /**
-     * Validate hash algorithm.
-     */
-    protected function validateHashAlgorithm(string $algorithm): void
-    {
-        if (self::$hashAlgorithms === null) {
-            self::$hashAlgorithms = hash_algos();
-        }
-        
-        if (!in_array($algorithm, self::$hashAlgorithms)) {
-            throw new InvalidArgumentException("Invalid hash algorithm: {$algorithm}");
-        }
+        return $this->registry;
     }
 
     /**
@@ -422,14 +226,6 @@ class Onym
         
         $fullPath = rtrim($this->storagePath, '/') . '/' . $filename;
         return file_exists($fullPath);
-    }
-
-    /**
-     * Get DateTime instance (allows for mocking in tests).
-     */
-    protected function getDateTime(): DateTime
-    {
-        return new DateTime();
     }
 
     /**
@@ -448,5 +244,26 @@ class Onym
     {
         $this->maxUniqueAttempts = max(1, $attempts);
         return $this;
+    }
+
+    /**
+     * Handle dynamic method calls for custom strategies.
+     *
+     * @param string $method
+     * @param array $arguments
+     * @return mixed
+     * @throws InvalidArgumentException
+     */
+    public function __call(string $method, array $arguments)
+    {
+        if ($this->registry->has($method)) {
+            $filename = $arguments[0] ?? null;
+            $extension = $arguments[1] ?? null;
+            $options = $arguments[2] ?? [];
+            
+            return $this->make($filename, $extension, $method, $options);
+        }
+        
+        throw new InvalidArgumentException("Method or strategy '{$method}' does not exist");
     }
 }

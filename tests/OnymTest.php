@@ -5,16 +5,31 @@ namespace Blaspsoft\Onym\Tests;
 use DateTime;
 use InvalidArgumentException;
 use Blaspsoft\Onym\Onym;
+use Blaspsoft\Onym\StrategyRegistry;
 use PHPUnit\Framework\Attributes\Test;
 
 class OnymTest extends TestCase
 {
     protected Onym $onym;
+    protected StrategyRegistry $registry;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->onym = new Onym();
+        
+        // Create and populate the registry
+        $this->registry = new StrategyRegistry();
+        $this->registry->registerMany([
+            new \Blaspsoft\Onym\Strategies\RandomStrategy(),
+            new \Blaspsoft\Onym\Strategies\UuidStrategy(),
+            new \Blaspsoft\Onym\Strategies\TimestampStrategy(),
+            new \Blaspsoft\Onym\Strategies\DateStrategy(),
+            new \Blaspsoft\Onym\Strategies\NumberedStrategy(),
+            new \Blaspsoft\Onym\Strategies\SlugStrategy(),
+            new \Blaspsoft\Onym\Strategies\HashStrategy(),
+        ]);
+        
+        $this->onym = new Onym($this->registry);
     }
 
     #[Test]
@@ -257,5 +272,43 @@ class OnymTest extends TestCase
         $filename = $this->onym->make('', '', 'slug');
         $this->assertStringEndsWith('.txt', $filename);
         $this->assertStringContainsString('file', $filename);
+    }
+
+    #[Test]
+    public function it_can_register_custom_strategies()
+    {
+        $this->onym->extend('custom', function($filename, $extension, $options) {
+            return 'custom_' . $filename;
+        });
+        
+        $this->assertTrue($this->onym->hasStrategy('custom'));
+        $filename = $this->onym->make('test', 'txt', 'custom');
+        $this->assertStringStartsWith('custom_test', $filename);
+    }
+
+    #[Test]
+    public function it_lists_all_registered_strategies()
+    {
+        $strategies = $this->onym->getStrategies();
+        
+        $this->assertContains('random', $strategies);
+        $this->assertContains('uuid', $strategies);
+        $this->assertContains('timestamp', $strategies);
+        $this->assertContains('date', $strategies);
+        $this->assertContains('numbered', $strategies);
+        $this->assertContains('slug', $strategies);
+        $this->assertContains('hash', $strategies);
+    }
+
+    #[Test]
+    public function it_can_call_custom_strategies_dynamically()
+    {
+        $this->onym->extend('uppercase', function($filename, $extension, $options) {
+            return strtoupper($filename);
+        });
+        
+        // Call using dynamic method
+        $filename = $this->onym->uppercase('test', 'txt');
+        $this->assertStringStartsWith('TEST', $filename);
     }
 }
